@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { db, q } from '@/lib/db';
+import { db, q, setupHint } from '@/lib/db';
 import { json, fail, newSessionToken, setSessionCookie, sameOrigin } from '@/lib/session';
 import { MAX_PIN_TRIES, LOCK_MINUTES } from '@/lib/constants';
 
@@ -33,5 +33,5 @@ export async function POST(req) {
     await q(db().from('staff').update({ failed_attempts: 0, locked_until: null }).eq('id', s.id));
     const res = json({ ok: true });
     return setSessionCookie(res, await newSessionToken(s, s.property_id));
-  } catch (e) { console.error(e); return fail('Sign-in failed. Try again.', 500); }
+  } catch (e) { console.error(e); return fail(`Sign-in failed. Try again. ${setupHint(e)}`, 500); }
 }

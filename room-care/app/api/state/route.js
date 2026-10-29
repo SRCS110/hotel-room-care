@@ -1,4 +1,4 @@
-import { db, q } from '@/lib/db';
+import { db, q, setupHint } from '@/lib/db';
 import { json, fail, requireSession } from '@/lib/session';
 import { getProperty, code } from '@/lib/data';
 
@@ -69,5 +69,5 @@ export async function GET() {
       inspections: inspections.map(i => ({ room: roomNo[i.room_id], at: ms(i.completed_at), by: nm(i.staff_id), fails: i.fail_count })),
       log: log.map(l => ({ at: ms(l.created_at), room: roomNo[l.room_id], type: l.kind, by: nm(l.staff_id), role: role(l.staff_id), text: l.summary, ticket: l.ticket_id, dept: l.department }))
     });
-  } catch (e) { console.error(e); return fail('Could not load data.', 500); }
+  } catch (e) { console.error(e); return fail(`Could not load data. ${setupHint(e)}`, 500); }
 }

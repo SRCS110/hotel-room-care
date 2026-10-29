@@ -1,4 +1,4 @@
-import { db, q } from '@/lib/db';
+import { db, q, setupHint } from '@/lib/db';
 import { json, fail, requireSession, sameOrigin } from '@/lib/session';
 import { getProperty, getRoom, logEvent, code, clean } from '@/lib/data';
 import { guessCat } from '@/lib/constants';
@@ -38,5 +38,5 @@ export async function POST(req) {
       opened++;
     }
     return json({ ok: true, fails: fails.length, opened });
-  } catch (e) { console.error(e); return fail('Could not save the inspection.', 500); }
+  } catch (e) { console.error(e); return fail(`Could not save the inspection. ${setupHint(e)}`, 500); }
 }

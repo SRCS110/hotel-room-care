@@ -1,4 +1,4 @@
-import { db, q } from '@/lib/db';
+import { db, q, setupHint } from '@/lib/db';
 import { json, fail, requireSession, sameOrigin } from '@/lib/session';
 import { getProperty, getRoom, logEvent, code, clean } from '@/lib/data';
 import { DEPTS, PRIORITIES, CATS, guessCat } from '@/lib/constants';
@@ -26,5 +26,5 @@ export async function POST(req) {
     const c = code(prop.prefix, t.id);
     await logEvent({ room_id: room.id, kind: 'open', department: b.department, staff_id: s.me.id, ticket_id: t.id, summary: `${c} opened: ${title}` });
     return json({ ok: true, code: c, department: b.department });
-  } catch (e) { console.error(e); return fail('Could not save the ticket.', 500); }
+  } catch (e) { console.error(e); return fail(`Could not save the ticket. ${setupHint(e)}`, 500); }
 }

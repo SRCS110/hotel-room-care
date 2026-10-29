@@ -1,7 +1,7 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { db, q } from './db';
+import { db, q, setupHint } from './db';
 import { readToken, signSession } from './token';
 import { SESSION_COOKIE, SESSION_HOURS } from './constants';
 
@@ -19,9 +19,12 @@ export const newSessionToken = (staff, property) => signSession({ sid: String(st
 // Every API route calls this. It re-checks the database on each request, so
 // turning someone's access off takes effect immediately, not when the cookie expires.
 export async function requireSession(roles) {
-  const payload = await readToken(cookies().get(SESSION_COOKIE)?.value);
-  if (!payload?.sid) return { error: fail('Please sign in again.', 401) };
-  const rows = await q(db().from('staff').select('id,name,portal,property_id,active').eq('id', Number(payload.sid)).limit(1));
+  let payload, rows;
+  try {
+    payload = await readToken(cookies().get(SESSION_COOKIE)?.value);
+    if (!payload?.sid) return { error: fail('Please sign in again.', 401) };
+    rows = await q(db().from('staff').select('id,name,portal,property_id,active').eq('id', Number(payload.sid)).limit(1));
+  } catch (e) { console.error(e); return { error: fail(`Could not check your sign-in. ${setupHint(e)}`, 500) }; }
   const me = rows[0];
   if (!me || !me.active) return { error: fail('Your access has been turned off. Ask a manager.', 401) };
   // Only managers may view a property other than their own.

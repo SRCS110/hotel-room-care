@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { db, q } from '@/lib/db';
+import { db, q, setupHint } from '@/lib/db';
 import { json, fail, requireSession, sameOrigin } from '@/lib/session';
 import { clean, isPin } from '@/lib/data';
 import { ROLES } from '@/lib/constants';
@@ -24,5 +24,5 @@ export async function POST(req) {
     const pin_hash = await bcrypt.hash(String(b.pin), 10);
     await q(db().from('staff').insert(props.map(p => ({ property_id: p.id, name, portal: b.portal, pin_hash, created_by: s.me.id }))));
     return json({ ok: true, message: `${name} added to ${ROLES[b.portal].label} at ${props.map(p => p.name).join(' and ')}` });
-  } catch (e) { console.error(e); return fail('Could not add that login.', 500); }
+  } catch (e) { console.error(e); return fail(`Could not add that login. ${setupHint(e)}`, 500); }
 }

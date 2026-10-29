@@ -1,4 +1,4 @@
-import { db, q } from '@/lib/db';
+import { db, q, setupHint } from '@/lib/db';
 import { json, fail } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -11,5 +11,5 @@ export async function GET() {
       q(db().from('staff').select('id,name,portal,property_id').eq('active', true).order('name'))
     ]);
     return json({ properties, staff });
-  } catch (e) { console.error(e); return fail('Could not load sign-in options.', 500); }
+  } catch (e) { console.error(e); return fail(`Could not load sign-in options. ${setupHint(e)}`, 500); }
 }

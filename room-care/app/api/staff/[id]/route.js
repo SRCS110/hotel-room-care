@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { db, q } from '@/lib/db';
+import { db, q, setupHint } from '@/lib/db';
 import { json, fail, requireSession, sameOrigin } from '@/lib/session';
 import { isPin } from '@/lib/data';
 
@@ -26,5 +26,5 @@ export async function PATCH(req, { params }) {
       return json({ ok: true, message: `${x.name}: access ${b.active ? 'on' : 'off'}` });
     }
     return fail('Nothing to change.');
-  } catch (e) { console.error(e); return fail('Could not save that change.', 500); }
+  } catch (e) { console.error(e); return fail(`Could not save that change. ${setupHint(e)}`, 500); }
 }

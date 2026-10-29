@@ -1,4 +1,4 @@
-import { db, q } from '@/lib/db';
+import { db, q, setupHint } from '@/lib/db';
 import { json, fail, requireSession, sameOrigin } from '@/lib/session';
 import { getProperty, logEvent, code, clean } from '@/lib/data';
 import { DEPTS, PRIORITIES, STATUSES, CATS, guessCat } from '@/lib/constants';
@@ -58,5 +58,5 @@ export async function POST(req, { params }) {
       await logEvent({ room_id: t.room_id, kind: ch.length ? 'update' : 'comment', department: nv.department, staff_id: s.me.id, ticket_id: id, summary: `${c} ${ch.length ? ch.join(', ') : 'comment'}${quote}` });
 
     return json({ ok: true, code: c, moved, department: nv.department });
-  } catch (e) { console.error(e); return fail('Could not save the update.', 500); }
+  } catch (e) { console.error(e); return fail(`Could not save the update. ${setupHint(e)}`, 500); }
 }

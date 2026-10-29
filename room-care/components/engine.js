@@ -300,7 +300,7 @@ export function start(app, mode) {
               <div class="chips" role="group" aria-label="Priority">${PRIORITIES.map(p => `<button type="button" class="chip" data-act="cmPrio" data-v="${p}" aria-pressed="${S.cmPrio === p}">${p}</button>`).join('')}</div>
               <label class="check"><input id="cm-ooo" type="checkbox" ${S.cmOoo ? 'checked' : ''}> Out of order</label>
             </div>
-            <div class="row-between"><span class="muted" style="font-size:13px">Posting as ${esc(st.me.name)}. Opens a new ${DEPTS[S.cmDept].toLowerCase()} ticket.</span><button class="btn primary" type="submit">Submit ticket</button></div>
+            <div class="row-between"><span class="muted" style="font-size:13px">Posting as ${esc(st.me.name)} · opens a new ${DEPTS[S.cmDept].toLowerCase()} ticket</span><button class="btn primary" type="submit">Submit ticket</button></div>
           </form>
           <div class="mini">
             <div><span class="muted">Last inspected</span><b>${i.lastIns ? ago(i.lastIns) : 'Never'}</b></div>
