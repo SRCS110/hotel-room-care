@@ -5,6 +5,8 @@ import { clean, isPin } from '@/lib/data';
 import { ROLES } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // Managers add staff logins at one hotel or both.
 export async function POST(req) {

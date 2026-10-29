@@ -2,6 +2,8 @@ import { db, q, setupHint } from '@/lib/db';
 import { json, fail } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // Feeds the sign-in dropdowns: hotels, then portals, then active staff names.
 export async function GET() {

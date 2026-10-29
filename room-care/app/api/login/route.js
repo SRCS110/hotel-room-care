@@ -4,6 +4,8 @@ import { json, fail, newSessionToken, setSessionCookie, sameOrigin } from '@/lib
 import { MAX_PIN_TRIES, LOCK_MINUTES } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 export async function POST(req) {
   if (!sameOrigin(req)) return fail('Bad request.', 400);

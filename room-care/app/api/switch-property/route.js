@@ -2,6 +2,8 @@ import { json, fail, requireSession, newSessionToken, setSessionCookie, sameOrig
 import { getProperty } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // Managers can look at either hotel.
 export async function POST(req) {

@@ -4,6 +4,8 @@ import { getProperty, logEvent, code, clean } from '@/lib/data';
 import { DEPTS, PRIORITIES, STATUSES, CATS, guessCat } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // Comment on / update an existing ticket. Allowed for the ticket's own department and managers.
 export async function POST(req, { params }) {

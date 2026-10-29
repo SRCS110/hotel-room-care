@@ -8,7 +8,11 @@ export function db() {
     const url = (process.env.SUPABASE_URL || '').trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
     const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
     if (!url || !key) throw new Error('MISSING_ENV');
-    client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    client = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      // Never let Next.js cache database reads: staff, tickets and rooms must always be live.
+      global: { fetch: (input, init = {}) => fetch(input, { ...init, cache: 'no-store' }) }
+    });
   }
   return client;
 }

@@ -3,6 +3,8 @@ import { json, fail, requireSession } from '@/lib/session';
 import { getProperty, code } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 const DAY = 864e5;
 const ms = t => (t ? new Date(t).getTime() : null);
 

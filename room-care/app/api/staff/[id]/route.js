@@ -4,6 +4,8 @@ import { json, fail, requireSession, sameOrigin } from '@/lib/session';
 import { isPin } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // Managers reset a PIN or turn a login on/off.
 export async function PATCH(req, { params }) {

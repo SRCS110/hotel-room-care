@@ -4,6 +4,8 @@ import { getProperty, getRoom, logEvent, code, clean } from '@/lib/data';
 import { guessCat } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // Submit a completed inspection sheet. Failed items can open maintenance tickets.
 export async function POST(req) {

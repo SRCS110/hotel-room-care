@@ -401,7 +401,8 @@ export function start(app, mode) {
     const el = e.target;
     const refocus = id => document.getElementById(id)?.focus();
     if (el.id === 'lg-prop') { S._prop = el.value; S._role = ''; S._user = ''; S.loginErr = ''; render(); refocus(el.value ? 'lg-role' : 'lg-prop'); }
-    else if (el.id === 'lg-role') { S._role = el.value; S._user = ''; S.loginErr = ''; render(); refocus(el.value ? 'lg-user' : 'lg-role'); }
+    else if (el.id === 'lg-role') { S._role = el.value; S._user = ''; S.loginErr = ''; render(); refocus(el.value ? 'lg-user' : 'lg-role');
+      api('/api/login-options').then(o => { opts = o; if (document.activeElement?.id !== 'lg-pin') { render(); refocus(S._role ? 'lg-user' : 'lg-role'); } }).catch(() => {}); }
     else if (el.id === 'lg-user') { S._user = el.value; S.loginErr = ''; render(); refocus(el.value ? 'lg-pin' : 'lg-user'); }
     else if (el.dataset.act === 'inRoom') { S.insp.room = el.value; render(); }
     else if (el.dataset.act === 'logRoom') { S.logRoom = el.value; render(); }
@@ -483,6 +484,17 @@ export function start(app, mode) {
     }, 60000);
   }
 
+  // Refresh as soon as someone comes back to the app (phone unlocked, tab switched back).
+  async function onVisible() {
+    if (document.visibilityState !== 'visible' || busy || !alive) return;
+    const typing = /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '');
+    try {
+      if (mode === 'login') { opts = await api('/api/login-options'); if (!typing) render(); }
+      else if (st && !S.drawer && S.tab !== 'inspect' && !typing) { await reload(); render(); }
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', onVisible);
+
   (async () => {
     try {
       if (mode === 'login') { opts = await api('/api/login-options'); if (S._prop && !opts.properties.some(p => p.id === S._prop)) S._prop = ''; }
@@ -500,6 +512,7 @@ export function start(app, mode) {
     app.removeEventListener('click', onClick); app.removeEventListener('change', onChange);
     app.removeEventListener('input', onInput); app.removeEventListener('submit', onSubmit);
     document.removeEventListener('keydown', onKey);
+    document.removeEventListener('visibilitychange', onVisible);
     try { MQ.removeEventListener('change', onMQ); } catch (e) {}
   };
 }

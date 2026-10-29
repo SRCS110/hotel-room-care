@@ -4,6 +4,8 @@ import { getProperty, getRoom, logEvent, code, clean } from '@/lib/data';
 import { DEPTS, PRIORITIES, CATS, guessCat } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // A room comment always opens a new ticket under the signed-in person.
 export async function POST(req) {
