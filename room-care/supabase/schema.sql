@@ -17,8 +17,9 @@ create table if not exists properties (
 create table if not exists rooms (
   id          bigserial primary key,
   property_id text not null references properties(id),
-  number      text not null,
-  floor       int  not null,
+  number      text not null,                -- room number, or the area name for property areas
+  floor       int  not null,                -- 0 for property areas
+  kind        text not null default 'room' check (kind in ('room','area')),
   unique (property_id, number)
 );
 
@@ -145,6 +146,16 @@ select p.id, (f * 100 + n)::text, f
 from properties p
 cross join generate_series(2, 4) as f
 cross join lateral generate_series(1, p.per_floor) as n
+on conflict (property_id, number) do nothing;
+
+-- Property areas for tickets outside guest rooms (edit in Table Editor > rooms, kind = 'area')
+insert into rooms (property_id, number, floor, kind)
+select p.id, a.name, 0, 'area'
+from properties p
+cross join (values
+  ('Lobby'), ('Front desk'), ('Elevator'), ('Hallways'), ('Stairwells'), ('Exterior & entrance'),
+  ('Parking'), ('Laundry room'), ('Back of house'), ('Other area')
+) as a(name)
 on conflict (property_id, number) do nothing;
 
 -- Inspection checklist (edit freely later; set active=false to retire an item)

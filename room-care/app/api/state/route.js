@@ -18,7 +18,7 @@ export async function GET() {
     if (!prop) return fail('Unknown hotel.', 404);
     const [properties, rooms, staffAll, checklist] = await Promise.all([
       q(db().from('properties').select('id,name').order('name')),
-      q(db().from('rooms').select('id,number,floor').eq('property_id', prop.id).order('number')),
+      q(db().from('rooms').select('id,number,floor,kind').eq('property_id', prop.id).order('floor').order('number')),
       q(db().from('staff').select('id,name,portal,property_id,active,locked_until,created_at,created_by')),
       q(db().from('checklist_items').select('id,grp,label,sort').eq('active', true).order('sort'))
     ]);
@@ -51,7 +51,8 @@ export async function GET() {
       me: { id: me.id, name: me.name, portal: me.portal },
       property: { id: prop.id, name: prop.name, prefix: prop.prefix, perFloor: prop.per_floor },
       properties,
-      rooms: rooms.map(r => r.number),
+      rooms: rooms.filter(r => r.kind !== 'area').map(r => r.number),
+      areas: rooms.filter(r => r.kind === 'area').map(r => r.number),
       oooRooms: [...new Set(ooo.map(o => roomNo[o.room_id]))],
       checklist: groups,
       staff: staffAll.filter(x => x.property_id === prop.id && (me.portal === 'manager' || x.active)).map(x => ({

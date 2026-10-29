@@ -16,14 +16,13 @@ const deptPill = d => `<span class="pill d-${esc(d)}">${esc(DEPTS[d] || d)}</spa
 const roleLabel = r => ROLES[r]?.label || 'Staff';
 
 export function start(app, mode) {
-  let st = null, opts = null, busy = false, alive = true, toastTimer, pollTimer;
+  let st = null, busy = false, alive = true, toastTimer, pollTimer;
   const S = {
     tab: null, filter: 'all', tFilter: 'active', drawer: null, insp: null, logRoom: '', logType: '', toast: '',
-    _prop: '', _role: '', _user: '', loginErr: '',
+    loginErr: '', lgName: '', lgRemember: true, choose: null,
     cmDraft: '', cmPrio: 'Normal', cmOoo: false, cmDept: 'maintenance', focusCm: false,
     addStaff: null, pinEdit: null, forceFull: false
   };
-  try { const s = JSON.parse(localStorage.getItem('rc-login') || 'null'); if (s?.prop) S._prop = s.prop; } catch (e) {}
 
   const MQ = window.matchMedia('(max-width:700px)');
   S.mobile = MQ.matches;
@@ -41,6 +40,12 @@ export function start(app, mode) {
   async function reload() { st = await api('/api/state'); }
 
   const role = () => st.me.portal;
+  const isArea = r => (st.areas || []).includes(r);
+  const where = r => (isArea(r) ? r : `Room ${r}`);
+  const rmCell = r => `<span class="rm${isArea(r) ? ' area' : ''}">${esc(r)}</span>`;
+  // Maintenance on a phone: one screen of active tickets; comment or mark done only.
+  const fieldMode = () => simple() && role() === 'maintenance';
+  const canSwitch = () => (role() === 'manager' || role() === 'maintenance') && st.properties.length > 1;
   const simple = () => S.mobile && !S.forceFull;
   const tabsFor = () => (simple() ? ROLES[role()].mobile : ROLES[role()].tabs);
   const seesAll = () => role() === 'frontdesk' || role() === 'manager';
@@ -72,26 +77,33 @@ export function start(app, mode) {
   }
   const toast = m => { S.toast = m; render(); };
 
+  // One sign-in screen: name + PIN. The account decides portal and hotel.
+  const ls = { get: k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }, set: (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) {} } };
   function login() {
-    if (!opts) return '<div class="loading"><span><span class="spin"></span>Loading</span></div>';
-    const p = S._prop, r = S._role, u = S._user;
-    const names = p && r ? opts.staff.filter(x => x.property_id === p && x.portal === r) : [];
-    return `<div class="login-page"><div></div>
-    <div class="wrap login"><form class="login-card" data-form="login" autocomplete="off">
-      <div class="wordmark">Stay Santa Rosa</div>
-      <h1>Room Care</h1>
-      <p class="sub">Maintenance and housekeeping tickets</p>
-      <label class="f step"><span><span class="step-n">1</span>Hotel</span>
-        <select id="lg-prop"><option value="">Select a hotel</option>${opts.properties.map(x => `<option value="${esc(x.id)}" ${p === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
-      <label class="f step"><span><span class="step-n">2</span>Portal</span>
-        <select id="lg-role" ${p ? '' : 'disabled'}><option value="">${p ? 'Select your department' : 'Select a hotel first'}</option>${Object.entries(ROLES).map(([k, x]) => `<option value="${k}" ${r === k ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
-      <label class="f step"><span><span class="step-n">3</span>Staff</span>
-        <select id="lg-user" ${p && r ? '' : 'disabled'}><option value="">${p && r ? (names.length ? 'Select your name' : 'No staff in this portal yet') : 'Select a portal first'}</option>${names.map(n => `<option value="${n.id}" ${String(u) === String(n.id) ? 'selected' : ''}>${esc(n.name)}</option>`).join('')}</select></label>
-      <label class="f step"><span><span class="step-n">4</span>PIN</span>
-        <input id="lg-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" ${p && r && u ? '' : 'disabled'} placeholder="${p && r && u ? '4 digits' : 'Select your name first'}"></label>
+    const saved = ls.get('rc-name');
+    const card = inner => `<div class="login-page"><div></div><div class="wrap login"><form class="login-card" data-form="login" autocomplete="off" novalidate>
+      <div class="wordmark">Stay Santa Rosa</div><h1>Room Care</h1>${inner}</form></div></div>`;
+    if (S.choose) return card(`<p class="sub">Your name and PIN open more than one dashboard. Which one?</p>
+      <div class="choose">${S.choose.map(c => `<button type="button" class="btn" data-act="pickPortal" data-v="${c.staffId}">${esc(c.label)}</button>`).join('')}</div>
       ${S.loginErr ? `<p class="err" role="alert">${esc(S.loginErr)}</p>` : ''}
-      <button class="btn primary" type="submit" ${p && r && u ? '' : 'disabled'}>${p && r && u ? `Enter ${ROLES[r].label}` : 'Sign in'}</button>
-    </form></div></div>`;
+      <button type="button" class="linkish center" data-act="loginBack">Back</button>`);
+    return card(`${saved ? `<div class="welcome"><span class="eyebrow">Welcome back</span><b>${esc(saved)}</b><button type="button" class="linkish" data-act="notMe">Not you?</button></div>`
+        : `<p class="sub">Sign in to your dashboard</p>
+      <label class="f">Your name<input id="lg-name" type="text" autocomplete="username" autocapitalize="words" spellcheck="false" maxlength="60" placeholder="e.g. Maria L." value="${esc(S.lgName || '')}"></label>`}
+      <label class="f">PIN<input id="lg-pin" class="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="current-password" placeholder="••••" aria-describedby="lg-help"></label>
+      ${saved ? '' : `<label class="check"><input id="lg-remember" type="checkbox" ${S.lgRemember === false ? '' : 'checked'}> Remember my name on this device</label>`}
+      ${S.loginErr ? `<p class="err" role="alert">${esc(S.loginErr)}</p>` : ''}
+      <button class="btn primary" type="submit">Sign in</button>
+      <p id="lg-help" class="muted center" style="margin:0;font-size:13px">Forgot your PIN? Ask a manager to reset it.</p>`);
+  }
+  async function doLogin(body) {
+    let r;
+    try { r = await api('/api/login', { method: 'POST', body: { ...body, preferredProperty: ls.get('rc-prop') } }); }
+    catch (err) { S.loginErr = err.message; return; }
+    if (r.choose) { S.choose = r.choose; S.loginErr = ''; return; }
+    if (S.lgRemember !== false || ls.get('rc-name')) ls.set('rc-name', r.name);
+    ls.set('rc-prop', r.property);
+    location.href = '/';
   }
 
   const activeCount = () => st.tickets.filter(t => t.status !== 'Done').length;
@@ -103,15 +115,13 @@ export function start(app, mode) {
         <div class="who"><span class="uname muted">${esc(st.me.name)}</span>${S.mobile ? `<button class="btn small ghost" data-act="viewMode">${simple() ? 'Full view' : 'Simple view'}</button>` : ''}
           <button class="btn small ghost" data-act="logout">Sign out</button></div>
       </div>
-      <nav class="tabs" role="tablist" aria-label="Sections">${tabsFor().map(t => `<button class="tab" role="tab" data-act="tab" data-v="${t}" aria-selected="${S.tab === t}">${TAB_LABEL[t]}${(t === 'tickets' || t === 'queue') && activeCount() ? `<span class="count">${activeCount()}</span>` : ''}</button>`).join('')}</nav>
+      ${tabsFor().length < 2 ? '' : `<nav class="tabs" role="tablist" aria-label="Sections">${tabsFor().map(t => `<button class="tab" role="tab" data-act="tab" data-v="${t}" aria-selected="${S.tab === t}">${TAB_LABEL[t]}${(t === 'tickets' || t === 'queue') && activeCount() ? `<span class="count">${activeCount()}</span>` : ''}</button>`).join('')}</nav>`}
     </div></header>
-    <main class="wrap ${simple() ? 'simple' : ''}">${({ staff: vStaff, overview: vOverview, rooms: vRooms, tickets: vTickets, queue: vTickets, inspect: vInspect, log: vLog })[S.tab]()}</main>
+    <main class="wrap ${simple() ? 'simple' : ''} ${tabsFor().length < 2 ? 'notabs' : ''}">${canSwitch() ? `<div class="toggle full hotel-toggle" role="group" aria-label="Hotel">${st.properties.map(p => `<button type="button" data-act="${p.id === st.property.id ? 'noop' : 'mgrSwitch'}" data-v="${esc(p.id)}" aria-pressed="${p.id === st.property.id}">${esc(p.name)}</button>`).join('')}</div>` : ''}${({ staff: vStaff, overview: vOverview, rooms: vRooms, tickets: vTickets, queue: vTickets, inspect: vInspect, log: vLog })[S.tab]()}</main>
     ${S.drawer ? drawer() : ''}`;
   }
 
-  function switchBtn(cls = 'btn small') {
-    const o = otherProp(); return o ? `<button class="${cls}" data-act="mgrSwitch" data-v="${esc(o.id)}">View ${esc(o.name)}</button>` : '';
-  }
+
 
   function vOverview() {
     const rooms = st.rooms, now = Date.now();
@@ -133,7 +143,7 @@ export function start(app, mode) {
     const overdue = rooms.filter(r => !last[r] || now - last[r] > 30 * DAY).sort((a, b) => last[a] - last[b]);
     const recent = st.log.slice(0, 8);
     const pct = n => (rooms.length ? Math.round(n / rooms.length * 100) : 0);
-    return `<div class="view-head"><div><span class="eyebrow">${esc(st.property.name)} · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span><h2>Manager overview</h2></div>${switchBtn()}</div>
+    return `<div class="view-head"><div><span class="eyebrow">${esc(st.property.name)} · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span><h2>Manager overview</h2></div></div>
     <div class="summary">
       <div><b>${byDept[0].o.length}</b><span>Open maintenance</span></div>
       <div><b>${byDept[1].o.length}</b><span>Open housekeeping</span></div>
@@ -142,7 +152,7 @@ export function start(app, mode) {
     </div>
     <div class="ov">
       <section class="panel"><div class="panel-h"><h3>Needs attention</h3><span class="muted" style="font-size:13px">Urgent, high, out of order, or unassigned over 24h</span></div>
-        <div class="ov-list">${attn.slice(0, 8).map(t => `<button class="ov-row" data-act="ticket" data-v="${t.id}"><span class="rm">${esc(t.room)}</span>
+        <div class="ov-list">${attn.slice(0, 8).map(t => `<button class="ov-row" data-act="ticket" data-v="${t.id}">${rmCell(t.room)}
           <span class="t">${esc(t.title)}<small>${DEPTS[t.dept]} · ${t.assignedTo ? esc(t.assignedTo) : 'Unassigned'} · ${ago(t.createdAt)}</small></span>
           <span class="actions" style="gap:4px">${t.ooo ? '<span class="pill p-bad">OOO</span>' : ''}${prioPill(t.priority)}</span></button>`).join('') || '<div class="empty">Nothing urgent right now.</div>'}</div></section>
       <section class="panel full-only"><div class="panel-h"><h3>By department</h3><button class="btn small ghost" data-act="tab" data-v="tickets">All tickets</button></div>
@@ -156,7 +166,7 @@ export function start(app, mode) {
         <div class="meter"><div class="row-between"><span>Inspected in last 30 days</span><b class="num">${in30} of ${rooms.length}</b></div><div class="bar"><i style="width:${pct(in30)}%;background:var(--ok)"></i></div></div>
         <div class="meter"><span class="muted" style="font-size:13px">Overdue (30+ days)</span><div class="actions">${overdue.slice(0, 16).map(r => `<button class="chip" data-act="room" data-v="${esc(r)}">${esc(r)}</button>`).join('') || '<span class="muted">None</span>'}${overdue.length > 16 ? `<span class="muted">+${overdue.length - 16} more</span>` : ''}</div></div></section>
       <section class="panel full-only" style="grid-column:1/-1"><div class="panel-h"><h3>Recent activity</h3><button class="btn small ghost" data-act="tab" data-v="log">Full log</button></div>
-        <div class="ov-list">${recent.map(l => `<${l.ticket ? 'button' : 'div'} class="ov-row" ${l.ticket ? `data-act="ticket" data-v="${l.ticket}"` : ''}><span class="rm">${esc(l.room)}</span>
+        <div class="ov-list">${recent.map(l => `<${l.ticket ? 'button' : 'div'} class="ov-row" ${l.ticket ? `data-act="ticket" data-v="${l.ticket}"` : ''}>${rmCell(l.room)}
           <span class="t">${esc(l.text)}<small>${esc(l.by)}, ${roleLabel(l.role)} · ${ago(l.at)}</small></span>${l.dept ? deptPill(l.dept) : '<span class="pill p-ok">Inspection</span>'}</${l.ticket ? 'button' : 'div'}>`).join('') || '<div class="empty">No activity yet.</div>'}</div></section>
     </div>`;
   }
@@ -167,7 +177,7 @@ export function start(app, mode) {
     const list = st.staff.slice().sort((a, b) => (b.active - a.active) || order.indexOf(a.portal) - order.indexOf(b.portal) || a.name.localeCompare(b.name));
     const counts = order.map(k => [k, st.staff.filter(x => x.active && x.portal === k).length]);
     const isMe = x => x.id === st.me.id;
-    return `<div class="view-head"><div><span class="eyebrow">${esc(st.property.name)} · ${st.staff.filter(x => x.active).length} active logins</span><h2>Staff logins</h2></div>${switchBtn('btn')}</div>
+    return `<div class="view-head"><div><span class="eyebrow">${esc(st.property.name)} · ${st.staff.filter(x => x.active).length} active logins</span><h2>Staff logins</h2></div></div>
     <form class="panel" data-form="addStaff">
       <div class="panel-h"><h3 style="font-size:15px">Add a staff login</h3><span class="muted" style="font-size:13px">They can sign in right away</span></div>
       <div class="add-staff">
@@ -202,6 +212,7 @@ export function start(app, mode) {
     const tkLabel = seesAll() ? 'Rooms with open tickets' : `Rooms with open ${DEPTS[role()].toLowerCase()} tickets`;
     const floors = [...new Set(rooms.map(r => r.slice(0, -2)))].sort((a, b) => b - a);
     return `<div class="view-head"><div><span class="eyebrow">${rooms.length} rooms · tap a room to write a ticket</span><h2>Room status</h2></div>
+      <button class="btn" data-act="areaTicket">Property ticket</button>
       <div class="chips scroll">${[['all', 'All'], ['tk', 'Open tickets'], ['ooo', 'Out of order'], ['due', 'Inspection due']].map(([k, l]) => `<button class="chip" data-act="filter" data-v="${k}" aria-pressed="${S.filter === k}">${l}</button>`).join('')}</div></div>
     <div class="summary hide-s">
       <div><b>${c.tk}</b><span>${tkLabel}</span></div>
@@ -212,18 +223,26 @@ export function start(app, mode) {
     <div class="legend"><span><i style="background:var(--ok)"></i>No issues</span><span><i style="background:var(--info)"></i>Open ticket</span><span><i style="background:var(--bad)"></i>Out of order</span><span><i style="background:var(--warn)"></i>Inspection due</span></div>
     <div class="floors">${floors.map(f => { const fr = rooms.filter(r => r.slice(0, -2) === f); return `<section class="floor"><div class="floor-label"><h3>Floor ${esc(f)}</h3><span class="muted num" style="font-size:13px">${esc(fr[0])} to ${esc(fr[fr.length - 1])}</span></div>
       <div class="grid">${fr.map(r => { const i = info[r]; return `<button class="room s-${i.state} ${match(i) ? '' : 'dim'}" data-act="room" data-v="${esc(r)}" aria-label="Room ${esc(r)}">
-        <span class="no">${esc(r)}</span><span class="st"></span><span class="meta">${i.open.length ? `${i.open.length} open` : i.since === null ? 'Not inspected' : `Insp ${i.since}d`}</span></button>`; }).join('')}</div></section>`; }).join('')}</div>`;
+        <span class="no">${esc(r)}</span><span class="st"></span><span class="meta">${i.open.length ? `${i.open.length} open` : i.since === null ? 'Not inspected' : `Insp ${i.since}d`}</span></button>`; }).join('')}</div></section>`; }).join('')}
+      ${(st.areas || []).length ? `<section class="floor"><div class="floor-label"><h3>Property areas</h3><span class="muted" style="font-size:13px">Lobby, elevator, parking and other spaces</span></div>
+        <div class="area-grid">${st.areas.map(a => { const open = st.tickets.filter(t => t.room === a && t.status !== 'Done'); const ooo = st.oooRooms.includes(a); return `<button class="area-tile ${ooo ? 's-ooo' : open.length ? 's-tk' : ''}" data-act="room" data-v="${esc(a)}"><span>${esc(a)}</span><span class="meta">${open.length ? `${open.length} open` : 'No open tickets'}</span></button>`; }).join('')}</div></section>` : ''}</div>`;
   }
 
   function ticketRows(list) {
     if (!list.length) return '<div class="empty">No tickets here.</div>';
     return list.map(t => `<button class="trow" data-act="ticket" data-v="${t.id}">
-      <span class="num c-id muted" style="font-size:13px">${esc(t.code)}</span><span class="rm">${esc(t.room)}</span>
-      <span class="ttl">${esc(t.title)}<small>${esc(t.reportedBy)}${t.assignedTo ? ` · assigned ${esc(t.assignedTo)}` : ' · unassigned'}${t.notes.length ? ` · ${t.notes.length} repl${t.notes.length > 1 ? 'ies' : 'y'}` : ''}</small></span>
+      <span class="num c-id muted" style="font-size:13px">${esc(t.code)}</span>${rmCell(t.room)}
+      <span class="ttl">${esc(t.title)}<small>${esc(t.reportedBy)}${fieldMode() ? ` · ${ago(t.createdAt)}` : t.assignedTo ? ` · assigned ${esc(t.assignedTo)}` : ' · unassigned'}${t.notes.length ? ` · ${t.notes.length} repl${t.notes.length > 1 ? 'ies' : 'y'}` : ''}</small></span>
       <span class="pls">${seesAll() ? deptPill(t.dept) : '<span></span>'}${prioPill(t.priority)}${statPill(t.status)}</span>
       <span class="muted c-age" style="font-size:12px;text-align:right">${ago(t.createdAt)}</span></button>`).join('');
   }
   function vTickets() {
+    if (fieldMode()) {
+      const pr = { Urgent: 0, High: 1, Normal: 2, Low: 3 };
+      const list = st.tickets.filter(t => t.status !== 'Done').sort((a, b) => (pr[a.priority] - pr[b.priority]) || (a.createdAt - b.createdAt));
+      return `<div class="view-head"><div><span class="eyebrow">${esc(st.property.name)} · urgent first</span><h2>Active tickets · ${list.length}</h2></div></div>
+      <div class="panel">${list.length ? ticketRows(list) : '<div class="empty">No active tickets. Nice work.</div>'}</div>`;
+    }
     const fd = seesAll(), mgr = role() === 'manager', pr = { Urgent: 0, High: 1, Normal: 2, Low: 3 };
     let list = st.tickets.slice();
     const f = S.tFilter;
@@ -237,7 +256,7 @@ export function start(app, mode) {
       : fd ? [['active', 'All active'], ['maintenance', 'Maintenance'], ['housekeeping', 'Housekeeping'], ['done', 'Completed']]
       : [['active', 'All active'], ['mine', 'Mine'], ['unassigned', 'Unassigned'], ['done', 'Completed']];
     return `<div class="view-head"><div><span class="eyebrow">${fd ? 'All departments' : DEPTS[role()] + ' tickets only'} · urgent first</span><h2>${fd ? 'Tickets' : DEPTS[role()] + ' queue'}</h2></div>
-      <button class="btn primary" data-act="goRooms">New ticket</button></div>
+      <div class="actions"><button class="btn primary" data-act="goRooms">Room ticket</button><button class="btn" data-act="areaTicket">Property ticket</button></div></div>
     <div class="panel"><div class="panel-h"><div class="chips scroll">${filters.map(([k, l]) => `<button class="chip" data-act="tFilter" data-v="${k}" aria-pressed="${f === k}">${l}</button>`).join('')}</div>
       <span class="muted" style="font-size:13px">${list.length} ticket${list.length === 1 ? '' : 's'}</span></div>
     <div>${ticketRows(list)}</div></div>`;
@@ -275,11 +294,11 @@ export function start(app, mode) {
     const shown = rows.slice(0, 150);
     const L = { inspection: ['Inspection', 'p-ok'], open: ['Opened', 'p-info'], update: ['Update', 'p-warn'], comment: ['Comment', 'p-neutral'], close: ['Closed', 'p-ok'] };
     return `<div class="view-head"><div><span class="eyebrow">Newest first · latest 400 events</span><h2>Activity log</h2></div>
-      <div class="filters"><select data-act="logRoom" aria-label="Room"><option value="">All rooms</option>${st.rooms.map(r => `<option ${S.logRoom === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
+      <div class="filters"><select data-act="logRoom" aria-label="Room"><option value="">All rooms and areas</option><optgroup label="Rooms">${st.rooms.map(r => `<option ${S.logRoom === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</optgroup>${(st.areas || []).length ? `<optgroup label="Property areas">${st.areas.map(r => `<option ${S.logRoom === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</optgroup>` : ''}</select>
       <select data-act="logType" aria-label="Activity type"><option value="">All activity</option><option value="inspection" ${S.logType === 'inspection' ? 'selected' : ''}>Inspections</option><option value="ticket" ${S.logType === 'ticket' ? 'selected' : ''}>Tickets</option></select></div></div>
     ${S.logRoom ? (() => { const i = roomInfo(S.logRoom); return `<div class="mini"><div><span class="muted">Last inspected</span><b>${i.lastIns ? ago(i.lastIns) : 'Never'}</b></div><div><span class="muted">Last maintenance</span><b>${i.lastMaint ? ago(i.lastMaint.at) : 'None'}</b></div><div><span class="muted">Open tickets</span><b>${i.open.length}</b></div></div>`; })() : ''}
     <div class="panel tbl-wrap"><table><thead><tr><th>Room</th><th>When</th><th>Activity</th><th>Detail</th><th>By</th></tr></thead><tbody>
-      ${shown.map(l => `<tr><td class="rm">${esc(l.room)}</td><td class="when">${fmt(l.at)}</td><td class="act"><span class="pill ${L[l.type][1]}">${L[l.type][0]}</span></td>
+      ${shown.map(l => `<tr><td class="rm${isArea(l.room) ? ' area' : ''}">${esc(l.room)}</td><td class="when">${fmt(l.at)}</td><td class="act"><span class="pill ${L[l.type][1]}">${L[l.type][0]}</span></td>
       <td class="det">${l.ticket ? `<button class="linkish" data-act="ticket" data-v="${l.ticket}">${esc(l.text)}</button>` : esc(l.text)}</td><td class="by muted" style="white-space:nowrap;font-size:14px">${esc(l.by)}, ${roleLabel(l.role)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No activity yet</td></tr>'}
     </tbody></table>${rows.length > 150 ? `<div class="empty">Showing latest 150 of ${rows.length}</div>` : ''}</div>`;
   }
@@ -289,46 +308,51 @@ export function start(app, mode) {
     if (D.type === 'room') {
       const r = D.id, i = roomInfo(r);
       const feed = i.tk.slice().sort((a, b) => (a.status === 'Done') - (b.status === 'Done') || b.createdAt - a.createdAt);
-      return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Room ${esc(r)}">
-        <div class="drawer-h"><div><span class="eyebrow">${esc(st.property.name)} · Floor ${esc(r.slice(0, -2))}</span><h2>Room ${esc(r)}</h2></div><button class="btn small" data-act="close">Close</button></div>
+      return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(where(r))}">
+        <div class="drawer-h"><div><span class="eyebrow">${esc(st.property.name)} · ${isArea(r) ? 'Property ticket' : `Floor ${esc(r.slice(0, -2))}`}</span><h2>${esc(where(r))}</h2></div><button class="btn small" data-act="close">Close</button></div>
         <div class="drawer-b">
           <form class="composer" data-form="comment">
+            ${isArea(r) ? `<label class="f">Where<select id="cm-area">${st.areas.map(a => `<option ${a === r ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>` : ''}
             <div class="f" style="display:grid;gap:6px;font-size:12px;font-weight:500;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--muted)">Send to
               <div class="toggle full" role="group" aria-label="Department">${Object.entries(DEPTS).map(([k, l]) => `<button type="button" data-act="cmDept" data-v="${k}" aria-pressed="${S.cmDept === k}">${l}</button>`).join('')}</div></div>
-            <label class="f" for="cm-body">What needs attention?<textarea id="cm-body" required maxlength="2000" placeholder="Describe the issue in room ${esc(r)}">${esc(S.cmDraft)}</textarea></label>
+            <label class="f" for="cm-body">What needs attention?<textarea id="cm-body" required maxlength="2000" placeholder="Describe the issue ${isArea(r) ? `at ${esc(r.toLowerCase())}` : `in room ${esc(r)}`}">${esc(S.cmDraft)}</textarea></label>
             <div class="row-between">
               <div class="chips" role="group" aria-label="Priority">${PRIORITIES.map(p => `<button type="button" class="chip" data-act="cmPrio" data-v="${p}" aria-pressed="${S.cmPrio === p}">${p}</button>`).join('')}</div>
               <label class="check"><input id="cm-ooo" type="checkbox" ${S.cmOoo ? 'checked' : ''}> Out of order</label>
             </div>
             <div class="row-between"><span class="muted" style="font-size:13px">Posting as ${esc(st.me.name)} · opens a new ${DEPTS[S.cmDept].toLowerCase()} ticket</span><button class="btn primary" type="submit">Submit ticket</button></div>
           </form>
-          <div class="mini">
+          ${isArea(r) ? '' : `<div class="mini">
             <div><span class="muted">Last inspected</span><b>${i.lastIns ? ago(i.lastIns) : 'Never'}</b></div>
             <div><span class="muted">Last maintenance</span><b>${i.lastMaint ? ago(i.lastMaint.at) : 'None'}</b></div>
             <div><span class="muted">Open</span><b>${i.open.length}${i.ooo ? ' · <span style="color:var(--bad)">OOO</span>' : ''}</b></div>
-          </div>
-          <div class="actions">${role() !== 'frontdesk' ? `<button class="btn small" data-act="inspectRoom" data-v="${esc(r)}">Start inspection</button>` : ''}${simple() ? '' : `<button class="btn small ghost" data-act="logFor" data-v="${esc(r)}">Room log</button>`}</div>
-          <div style="display:grid;gap:10px"><span class="eyebrow">${seesAll() ? 'All tickets' : DEPTS[role()] + ' tickets'} for this room · ${feed.length}</span>
+          </div>`}
+          <div class="actions">${role() !== 'frontdesk' && !isArea(r) ? `<button class="btn small" data-act="inspectRoom" data-v="${esc(r)}">Start inspection</button>` : ''}${simple() ? '' : `<button class="btn small ghost" data-act="logFor" data-v="${esc(r)}">${isArea(r) ? 'Area log' : 'Room log'}</button>`}</div>
+          <div style="display:grid;gap:10px"><span class="eyebrow">${seesAll() ? 'All tickets' : DEPTS[role()] + ' tickets'} for ${isArea(r) ? esc(r.toLowerCase()) : 'this room'} · ${feed.length}</span>
             <div class="feed">${feed.map(t => `<button class="cmt" data-act="ticket" data-v="${t.id}">
               <div class="cmt-h"><b>${esc(t.reportedBy)}</b><span class="muted">${roleLabel(t.reportedRole)} · ${fmt(t.createdAt)}</span></div>
               <p>${esc(t.desc)}</p>
               <div class="cmt-f"><span class="num muted" style="font-size:12px">${esc(t.code)}</span>${seesAll() ? deptPill(t.dept) : ''}${prioPill(t.priority)}${statPill(t.status)}${t.notes.length ? `<span class="muted" style="font-size:13px">${t.notes.length} repl${t.notes.length > 1 ? 'ies' : 'y'}</span>` : ''}</div>
-            </button>`).join('') || '<span class="muted">No tickets for this room yet.</span>'}</div></div>
+            </button>`).join('') || `<span class="muted">No tickets for ${isArea(r) ? 'this area' : 'this room'} yet.</span>`}</div></div>
         </div></aside>`;
     }
     const t = findTicket(D.id); if (!t) return '';
     const work = role() === t.dept || role() === 'manager';
     return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Ticket ${esc(t.code)}">
-      <div class="drawer-h"><div><span class="eyebrow">${esc(t.code)} · Room ${esc(t.room)}</span><h2>${esc(t.title)}</h2></div><button class="btn small" data-act="close">Close</button></div>
+      <div class="drawer-h"><div><span class="eyebrow">${esc(t.code)} · ${esc(where(t.room))}</span><h2>${esc(t.title)}</h2></div><button class="btn small" data-act="close">Close</button></div>
       <div class="drawer-b">
         <div class="actions">${deptPill(t.dept)}${prioPill(t.priority)}${statPill(t.status)}<span class="pill p-neutral">${esc(t.category)}</span>${t.ooo ? '<span class="pill p-bad">Out of order</span>' : ''}</div>
-        <div class="muted" style="font-size:14px">${t.assignedTo ? `Assigned to ${esc(t.assignedTo)}` : 'Unassigned'}${t.closedAt ? ` · closed ${fmt(t.closedAt)}` : ''}</div>
+        <div class="muted" style="font-size:14px">${fieldMode() ? `Reported ${ago(t.createdAt)}` : t.assignedTo ? `Assigned to ${esc(t.assignedTo)}` : 'Unassigned'}${t.closedAt ? ` · closed ${fmt(t.closedAt)}` : ''}</div>
         <div class="feed">
           <div class="cmt"><div class="cmt-h"><b>${esc(t.reportedBy)}</b><span class="muted">${roleLabel(t.reportedRole)} · ${fmt(t.createdAt)}</span></div><p>${esc(t.desc)}</p></div>
           ${t.notes.map(n => `<div class="cmt reply ${n.change ? 'upd' : ''}"><div class="cmt-h"><b>${esc(n.by)}</b><span class="muted">${roleLabel(n.role)} · ${fmt(n.at)}</span></div>${n.change ? `<span class="eyebrow" style="color:var(--accent)">${esc(n.change)}</span>` : ''}${n.text ? `<p>${esc(n.text)}</p>` : ''}</div>`).join('')}
         </div>
-        ${work ? `<form class="composer" data-form="update">
-          ${simple() ? `<div class="quick">${role() !== 'manager' && t.assignedId !== st.me.id && t.status !== 'Done' ? `<button type="button" class="btn" data-act="quick" data-v="take">Take it</button>` : ''}${t.status !== 'Done' ? `<button type="button" class="btn primary" data-act="quick" data-v="done" ${role() === 'manager' || t.assignedId === st.me.id ? 'style="grid-column:1/-1"' : ''}>Mark done</button>` : `<button type="button" class="btn" data-act="quick" data-v="reopen" style="grid-column:1/-1">Reopen</button>`}</div>` : ''}
+        ${work && fieldMode() ? `<form class="composer" data-form="mcomment">
+          <label class="f">Comment<textarea id="up-note" maxlength="2000" placeholder="What you found, what you did, parts needed"></textarea></label>
+          <div class="quick"><button type="submit" class="btn">Post comment</button>${t.status !== 'Done' ? `<button type="button" class="btn primary" data-act="quick" data-v="done">Mark done</button>` : `<button type="button" class="btn" data-act="quick" data-v="reopen">Reopen</button>`}</div>
+          <span class="muted" style="font-size:13px">Mark done also saves anything typed in the comment box.</span></form>`
+        : work ? `<form class="composer" data-form="update">
+          ${simple() ? `<div class="quick">${role() === 'housekeeping' && t.assignedId !== st.me.id && t.status !== 'Done' ? `<button type="button" class="btn" data-act="quick" data-v="take">Take it</button>` : ''}${t.status !== 'Done' ? `<button type="button" class="btn primary" data-act="quick" data-v="done" ${role() !== 'housekeeping' || t.assignedId === st.me.id ? 'style="grid-column:1/-1"' : ''}>Mark done</button>` : `<button type="button" class="btn" data-act="quick" data-v="reopen" style="grid-column:1/-1">Reopen</button>`}</div>` : ''}
           <label class="f">Comment or update<textarea id="up-note" maxlength="2000" placeholder="What you found, what you did, what's next"></textarea></label>
           ${simple() ? '<details class="more"><summary>More fields</summary>' : ''}
           <div class="form-grid">
@@ -341,7 +365,7 @@ export function start(app, mode) {
           </div>
           ${simple() ? '</details>' : ''}
           <div class="row-between"><span class="muted" style="font-size:13px">${role() === 'manager' ? 'Posting as manager. ' : ''}Adds to this ticket. No new ticket is created.</span><button class="btn primary" type="submit">Post update</button></div></form>`
-        : `<div class="panel" style="padding:16px;display:grid;gap:10px;background:var(--band)"><span class="muted" style="font-size:14px">Front Desk comments open a new ticket. ${DEPTS[t.dept]} posts updates here.</span><div><button class="btn" data-act="room" data-v="${esc(t.room)}">New ticket for room ${esc(t.room)}</button></div></div>`}
+        : `<div class="panel" style="padding:16px;display:grid;gap:10px;background:var(--band)"><span class="muted" style="font-size:14px">Front Desk comments open a new ticket. ${DEPTS[t.dept]} posts updates here.</span><div><button class="btn" data-act="room" data-v="${esc(t.room)}">New ticket for ${esc(isArea(t.room) ? t.room.toLowerCase() : 'room ' + t.room)}</button></div></div>`}
       </div></aside>`;
   }
 
@@ -354,7 +378,9 @@ export function start(app, mode) {
   async function sendUpdate(t, fields, note) {
     const r = await api(`/api/tickets/${t.id}`, { method: 'POST', body: { comment: note, ...fields } });
     await reload();
-    if (r.moved) { S.drawer = null; S.toast = `${r.code} moved to ${DEPTS[r.department]}`; } else S.toast = `${r.code} updated`;
+    if (r.moved) { S.drawer = null; S.toast = `${r.code} moved to ${DEPTS[r.department]}`; }
+    else if (fieldMode() && fields.status === 'Done') { S.drawer = null; S.toast = `${r.code} marked done`; }
+    else S.toast = fields.status ? `${r.code} updated` : `${r.code}: comment posted`;
   }
   function openRoom(r) { S.drawer = { type: 'room', id: r }; S.cmDraft = ''; S.cmPrio = 'Normal'; S.cmOoo = false; S.cmDept = 'maintenance'; S.focusCm = true; }
 
@@ -369,7 +395,7 @@ export function start(app, mode) {
       case 'ticket': if (!findTicket(v)) { S.toast = 'That ticket belongs to another department or has been archived.'; break; } S.drawer = { type: 'ticket', id: v }; break;
       case 'close': S.drawer = null; break;
       case 'logout': return run(async () => { await api('/api/logout', { method: 'POST' }); location.href = '/login'; });
-      case 'mgrSwitch': return run(async () => { const r = await api('/api/switch-property', { method: 'POST', body: { property: v } }); S.drawer = null; S.insp = null; S.logRoom = ''; S.addStaff = null; await reload(); S.toast = `Now viewing ${r.property}`; }, b);
+      case 'mgrSwitch': return run(async () => { const r = await api('/api/switch-property', { method: 'POST', body: { property: v } }); S.drawer = null; S.insp = null; S.logRoom = ''; S.addStaff = null; await reload(); ls.set('rc-prop', st.property.id); S.toast = `Now at ${r.property}`; }, b);
       case 'pinEdit': S.pinEdit = +v; break;
       case 'pinCancel': S.pinEdit = null; break;
       case 'pinSave': {
@@ -387,6 +413,11 @@ export function start(app, mode) {
         return run(() => sendUpdate(t, f, note), b);
       }
       case 'goRooms': S.tab = 'rooms'; S.filter = 'all'; S.toast = 'Tap a room to write its ticket'; break;
+      case 'areaTicket': if (!(st.areas || []).length) { S.toast = 'No property areas set up yet. Run the property-areas SQL update.'; break; } openRoom(st.areas[0]); break;
+      case 'noop': return;
+      case 'notMe': ls.set('rc-name', ''); S.loginErr = ''; S.lgName = ''; render(); document.getElementById('lg-name')?.focus(); return;
+      case 'loginBack': S.choose = null; S.loginErr = ''; break;
+      case 'pickPortal': return run(() => doLogin({ name: S.nameHold, pin: S.pinHold, staffId: Number(v) }), b);
       case 'cmPrio': S.cmPrio = v; break;
       case 'cmDept': S.cmDept = v; break;
       case 'inspectRoom': S.insp = { room: v, results: {}, notes: {}, mk: {} }; S.tab = 'inspect'; S.drawer = null; break;
@@ -400,22 +431,22 @@ export function start(app, mode) {
   function onChange(e) {
     const el = e.target;
     const refocus = id => document.getElementById(id)?.focus();
-    if (el.id === 'lg-prop') { S._prop = el.value; S._role = ''; S._user = ''; S.loginErr = ''; render(); refocus(el.value ? 'lg-role' : 'lg-prop'); }
-    else if (el.id === 'lg-role') { S._role = el.value; S._user = ''; S.loginErr = ''; render(); refocus(el.value ? 'lg-user' : 'lg-role');
-      api('/api/login-options').then(o => { opts = o; if (document.activeElement?.id !== 'lg-pin') { render(); refocus(S._role ? 'lg-user' : 'lg-role'); } }).catch(() => {}); }
-    else if (el.id === 'lg-user') { S._user = el.value; S.loginErr = ''; render(); refocus(el.value ? 'lg-pin' : 'lg-user'); }
+    if (el.id === 'lg-remember') { S.lgRemember = el.checked; }
     else if (el.dataset.act === 'inRoom') { S.insp.room = el.value; render(); }
     else if (el.dataset.act === 'logRoom') { S.logRoom = el.value; render(); }
     else if (el.dataset.act === 'logType') { S.logType = el.value; render(); }
     else if (el.dataset.mk) { S.insp.mk[el.dataset.mk] = el.checked; }
     else if (el.id === 'cm-ooo') { S.cmOoo = el.checked; }
-    else if (el.id === 'as-portal' && S.addStaff) { S.addStaff.portal = el.value; }
+    else if (el.id === 'cm-area' && S.drawer) { S.drawer.id = el.value; render(); }
+    else if (el.id === 'as-portal' && S.addStaff) { S.addStaff.portal = el.value; if (el.value === 'maintenance' && st.properties.length > 1) { S.addStaff.where = 'both'; render(); } }
     else if (el.id === 'as-where' && S.addStaff) { S.addStaff.where = el.value; }
   }
   function onInput(e) {
     const id = e.target.id;
     if (S.addStaff && (id === 'as-name' || id === 'as-pin')) S.addStaff[id === 'as-name' ? 'name' : 'pin'] = e.target.value;
     if (id === 'cm-body') S.cmDraft = e.target.value;
+    if (id === 'lg-name') S.lgName = e.target.value;
+    if (id === 'lg-pin') { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); if (e.target.value.length === 4 && (ls.get('rc-name') || document.getElementById('lg-name')?.value.trim())) e.target.form.requestSubmit(); }
     if (e.target.dataset.note) S.insp.notes[e.target.dataset.note] = e.target.value;
   }
   function onKey(e) { if (e.key === 'Escape' && S.drawer) { S.drawer = null; render(); } }
@@ -423,15 +454,12 @@ export function start(app, mode) {
     e.preventDefault();
     const f = e.target.dataset.form, $ = id => document.getElementById(id), btn = e.target.querySelector('button[type=submit]');
     if (f === 'login') {
-      if (!(S._prop && S._role && S._user)) return;
-      const pin = $('lg-pin').value;
+      const name = ls.get('rc-name') || ($('lg-name')?.value || '').trim(), pin = $('lg-pin').value;
+      S.lgName = $('lg-name')?.value || S.lgName;
+      if (!name) { S.loginErr = 'Enter your name.'; render(); $('lg-name')?.focus(); return; }
       if (!/^\d{4}$/.test(pin)) { S.loginErr = 'Enter your 4-digit PIN.'; render(); $('lg-pin')?.focus(); return; }
-      return run(async () => {
-        try { await api('/api/login', { method: 'POST', body: { staffId: Number(S._user), pin } }); }
-        catch (err) { S.loginErr = err.message; return; }
-        try { localStorage.setItem('rc-login', JSON.stringify({ prop: S._prop })); } catch (x) {}
-        location.href = '/';
-      }, btn).then(() => $('lg-pin')?.focus());
+      S.pinHold = pin; S.nameHold = name;
+      return run(() => doLogin({ name, pin }), btn).then(() => { if (!S.choose) $('lg-pin')?.focus(); });
     }
     if (f === 'comment') {
       const body = $('cm-body').value.trim(); if (!body) return;
@@ -449,6 +477,11 @@ export function start(app, mode) {
         S.toast = `Room ${I.room} inspected${r.opened ? `, ${r.opened} maintenance ticket${r.opened > 1 ? 's' : ''} opened` : ''}`;
         S.insp = null; await reload();
       }, btn);
+    }
+    if (f === 'mcomment') {
+      const t = findTicket(S.drawer.id), note = $('up-note').value.trim();
+      if (!note) { S.toast = 'Write a comment first'; render(); return; }
+      return run(() => sendUpdate(t, {}, note), btn);
     }
     if (f === 'update') {
       const t = findTicket(S.drawer.id), note = $('up-note').value.trim();
@@ -489,16 +522,15 @@ export function start(app, mode) {
     if (document.visibilityState !== 'visible' || busy || !alive) return;
     const typing = /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '');
     try {
-      if (mode === 'login') { opts = await api('/api/login-options'); if (!typing) render(); }
-      else if (st && !S.drawer && S.tab !== 'inspect' && !typing) { await reload(); render(); }
+      if (mode === 'login') return;
+      if (st && !S.drawer && S.tab !== 'inspect' && !typing) { await reload(); render(); }
     } catch (e) {}
   }
   document.addEventListener('visibilitychange', onVisible);
 
   (async () => {
     try {
-      if (mode === 'login') { opts = await api('/api/login-options'); if (S._prop && !opts.properties.some(p => p.id === S._prop)) S._prop = ''; }
-      else { await reload(); S.tab = tabsFor()[0]; poll(); }
+      if (mode !== 'login') { await reload(); S.tab = tabsFor()[0]; poll(); }
     } catch (e) {
       if (e.message === 'Signed out') return;
       app.innerHTML = `<div class="loading"><span>${esc(e.message)} <button class="btn small" onclick="location.reload()">Retry</button></span></div>`;

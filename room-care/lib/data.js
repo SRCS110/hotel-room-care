@@ -8,7 +8,7 @@ export async function getProperty(id) {
   return rows[0] || null;
 }
 export async function getRoom(propertyId, number) {
-  const rows = await q(db().from('rooms').select('id,number').eq('property_id', propertyId).eq('number', String(number)).limit(1));
+  const rows = await q(db().from('rooms').select('id,number,kind').eq('property_id', propertyId).eq('number', String(number)).limit(1));
   return rows[0] || null;
 }
 export async function logEvent(row) {

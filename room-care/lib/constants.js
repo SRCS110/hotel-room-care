@@ -2,7 +2,7 @@
 export const ROLES = {
   frontdesk:    { label: 'Front Desk',   tabs: ['rooms', 'tickets', 'log'],                         mobile: ['rooms', 'tickets'] },
   housekeeping: { label: 'Housekeeping', tabs: ['queue', 'rooms', 'inspect', 'log'],                mobile: ['queue', 'rooms', 'inspect'] },
-  maintenance:  { label: 'Maintenance',  tabs: ['queue', 'rooms', 'inspect', 'log'],                mobile: ['queue', 'rooms', 'inspect'] },
+  maintenance:  { label: 'Maintenance',  tabs: ['queue', 'rooms', 'inspect', 'log'],                mobile: ['queue'] },
   manager:      { label: 'Manager',      tabs: ['overview', 'tickets', 'rooms', 'inspect', 'log', 'staff'], mobile: ['overview', 'tickets', 'rooms', 'inspect'] }
 };
 export const DEPTS = { maintenance: 'Maintenance', housekeeping: 'Housekeeping' };

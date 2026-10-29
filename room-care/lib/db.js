@@ -31,6 +31,7 @@ export function setupHint(e) {
   if (/SESSION_SECRET/.test(m)) return 'SESSION_SECRET is missing or shorter than 32 characters in Vercel. Fix it, then redeploy.';
   if (/invalid api key|jwt|JWS|signature|Invalid authentication/i.test(m)) return 'SUPABASE_SERVICE_ROLE_KEY is not valid. Copy the service_role (secret) key from Supabase > Project Settings > API, then redeploy.';
   if (/permission denied/i.test(m)) return 'The key in Vercel is the anon/public key. Use the service_role (secret) key instead, then redeploy.';
+  if (/kind/.test(m) && /does not exist|schema cache/i.test(m)) return 'The property-areas update has not been run. Run supabase/migrations/002_property_areas.sql in the Supabase SQL Editor.';
   if (/does not exist|could not find the table|schema cache/i.test(m)) return 'The database tables are missing. Run supabase/schema.sql in the Supabase SQL Editor.';
   if (/fetch failed|ENOTFOUND|getaddrinfo|Invalid URL|ECONNREFUSED/i.test(m)) return 'SUPABASE_URL is wrong. Use the Project URL from Supabase > Project Settings > API (https://xxxx.supabase.co), then redeploy.';
   return m.slice(0, 200);

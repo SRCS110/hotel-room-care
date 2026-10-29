@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { readToken } from './lib/token';
 import { SESSION_COOKIE } from './lib/constants';
 
-// Routes reachable without a session: the PIN page and the two calls it needs.
-const PUBLIC = ['/login', '/api/login', '/api/login-options'];
+// Routes reachable without a session: the sign-in page and the sign-in call.
+const PUBLIC = ['/login', '/api/login'];
 
 export async function middleware(req) {
   const { pathname } = req.nextUrl;

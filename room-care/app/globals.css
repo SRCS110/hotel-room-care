@@ -128,7 +128,7 @@ main{padding-block:28px 72px;display:grid;gap:22px}
 /* Panels/lists */
 .panel{background:var(--surface);border:1px solid var(--line)}
 .panel-h{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--band)}
-.trow{display:grid;grid-template-columns:84px 52px minmax(0,1fr) auto auto auto 64px;gap:12px;align-items:center;padding:13px 16px;border:0;border-top:1px solid var(--line);background:none;text-align:left;width:100%}
+.trow{display:grid;grid-template-columns:84px minmax(52px,96px) minmax(0,1fr) auto auto auto 64px;gap:12px;align-items:center;padding:13px 16px;border:0;border-top:1px solid var(--line);background:none;text-align:left;width:100%}
 .trow:first-child{border-top:0}
 .trow:hover{background:var(--band)}
 .trow .ttl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -287,7 +287,9 @@ main{min-width:0;overflow-x:clip;grid-template-columns:minmax(0,1fr)}
 @media (max-width:700px){
   .view-head{align-items:stretch;flex-direction:column;gap:12px}
   .view-head>.btn{align-self:flex-start}
-  .view-head .chips.scroll,.panel-h .chips.scroll{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;width:100%;flex:1 1 100%}
+  .view-head .chips.scroll,.panel-h .chips.scroll{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;width:100%}
+  .panel-h .chips.scroll{flex:1 1 100%}
+  .view-head .chips.scroll{flex:0 0 auto}
   .chips.scroll::-webkit-scrollbar{display:none}
   .chips.scroll .chip{flex:none}
   .panel-h{padding:10px 12px}
@@ -317,3 +319,27 @@ main{min-width:0;overflow-x:clip;grid-template-columns:minmax(0,1fr)}
   .item{padding:10px 14px}
 }
 @media (max-width:480px){.add-staff{grid-template-columns:minmax(0,1fr)}.add-staff .full{grid-column:auto}}
+
+/* ---- Hotel toggle and property areas ---- */
+.hotel-toggle{max-width:420px}
+.hotel-toggle button{min-height:42px}
+.area-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.area-tile{border:1px solid var(--line);background:var(--surface);padding:12px 14px;display:grid;gap:2px;text-align:left;border-left:3px solid var(--ok);min-height:62px}
+.area-tile:hover{border-color:var(--ink)}
+.area-tile.s-tk{border-left-color:var(--info)}
+.area-tile.s-ooo{border-left-color:var(--bad);background:var(--bad-soft)}
+.area-tile .meta{font-size:12px;color:var(--muted)}
+.rm.area{font-family:var(--ff-body);font-size:11px;letter-spacing:.06em;text-transform:uppercase;line-height:1.25;max-width:96px;overflow-wrap:anywhere}
+td.rm.area{font-size:11px}
+@media (max-width:480px){.area-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---- Sign-in ---- */
+.login-card .center{text-align:center;justify-self:center}
+.pin-input{font-size:28px!important;letter-spacing:.7em;text-align:center;padding-left:.7em!important;font-variant-numeric:tabular-nums}
+.pin-input::placeholder{letter-spacing:.5em;color:var(--line)}
+.welcome{display:grid;justify-items:center;gap:4px;text-align:center;padding:8px 0}
+.welcome b{font-family:var(--ff-display);font-weight:400;font-size:24px;letter-spacing:var(--track-title)}
+.choose{display:grid;gap:8px}
+.choose .btn{min-height:52px}
+.login-card .check{justify-self:start}
+@media (max-width:700px){main.notabs{padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}}

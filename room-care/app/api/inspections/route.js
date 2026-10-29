@@ -17,7 +17,7 @@ export async function POST(req) {
       getProperty(s.property), getRoom(s.property, b.room),
       q(db().from('checklist_items').select('id,label').eq('active', true))
     ]);
-    if (!room) return fail('Pick a room first.', 404);
+    if (!room || room.kind === 'area') return fail('Pick a guest room first.', 404);
     const byId = Object.fromEntries(items.map(i => [i.id, i]));
     const results = (Array.isArray(b.results) ? b.results : []).filter(r => byId[r.itemId] && ['pass', 'fail', 'na'].includes(r.result));
     if (results.length !== items.length) return fail('Mark every item before submitting.');

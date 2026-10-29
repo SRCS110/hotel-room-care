@@ -13,13 +13,14 @@ export async function PATCH(req, { params }) {
   const s = await requireSession(['manager']); if (s.error) return s.error;
   try {
     const id = Number(params.id);
-    const rows = await q(db().from('staff').select('id,name,property_id').eq('id', id).limit(1));
+    const rows = await q(db().from('staff').select('id,name,portal,property_id').eq('id', id).limit(1));
     const x = rows[0];
     if (!x || x.property_id !== s.property) return fail('Staff member not found.', 404);
     const b = await req.json();
     if (b.pin !== undefined) {
       if (!isPin(b.pin)) return fail('PIN must be exactly 4 digits.');
-      await q(db().from('staff').update({ pin_hash: await bcrypt.hash(String(b.pin), 10), failed_attempts: 0, locked_until: null }).eq('id', id));
+      // Same person at both hotels shares one PIN.
+      await q(db().from('staff').update({ pin_hash: await bcrypt.hash(String(b.pin), 10), failed_attempts: 0, locked_until: null }).eq('name', x.name).eq('portal', x.portal));
       return json({ ok: true, message: `PIN reset for ${x.name}` });
     }
     if (typeof b.active === 'boolean') {
