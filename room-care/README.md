@@ -71,6 +71,19 @@ On a phone, Maintenance sees a single screen: the active tickets for the current
 - **Storage:** only the latest **3** sheets per room are kept. Older ones are deleted automatically when a new one is submitted. Tickets that came from an old sheet are kept.
 - **Edit the checklist** in Supabase under Table Editor > checklist_items. Set `active = false` to retire an item.
 
+## Stayntouch webhook (read-only)
+1. In Supabase, run `supabase/migrations/005_stayntouch_events.sql`.
+2. Deploy. To confirm the address is live, open `https://staff.staysantarosa.com/api/stayntouch`; it should show `{"ok":true,...}`.
+3. In Stayntouch, go to **Chain > Webhooks > Add**:
+   - **Delivery type:** Generic
+   - **URL:** `https://staff.staysantarosa.com/api/stayntouch`
+   - **Vendor/integration:** Room Care
+   - **Signature secret:** click **Generate** and copy the value.
+4. In Vercel, add `STAYNTOUCH_WEBHOOK_SECRET` with that value and redeploy. Then click **Add webhook** in Stayntouch.
+5. Messages arrive in Supabase under **Table Editor > stayntouch_events**. `verified = true` means the signature matched. Only the newest 5,000 are kept.
+
+For now this only captures messages. Room features (last guest stay, occupied/vacant, rooms due for turnover) get built once real messages show what Stayntouch sends.
+
 ## How the security works
 - **PIN check.** PINs are stored as bcrypt hashes and checked on the server. After 5 wrong tries, that login is locked for 15 minutes. A manager can clear the lock by resetting the PIN.
 - **Session.** A correct PIN sets a signed, HTTP-only cookie that lasts 12 hours, so staff sign in once per shift.
