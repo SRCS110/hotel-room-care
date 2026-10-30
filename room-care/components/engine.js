@@ -4,7 +4,7 @@
 import { ROLES, DEPTS, CATS, PRIORITIES, STATUSES, guessCat } from '../lib/constants';
 
 const DAY = 864e5;
-const TAB_LABEL = { staff: 'Staff', overview: 'Overview', rooms: 'Rooms', tickets: 'Tickets', queue: 'Queue', inspect: 'Inspect', log: 'Log' };
+const TAB_LABEL = { staff: 'Staff', overview: 'Overview', rooms: 'Rooms', tickets: 'Tickets', queue: 'Queue', inspect: 'Turnover', log: 'Log' };
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ago = t => { const d = (Date.now() - t) / DAY; if (d < 1 / 24) return 'just now'; if (d < 1) return Math.round(d * 24) + 'h ago'; if (d < 2) return 'yesterday'; return Math.round(d) + 'd ago'; };
@@ -161,10 +161,13 @@ export function start(app, mode) {
         </tbody></table></div></section>
       <section class="panel full-only"><div class="panel-h"><h3>Staff workload</h3><span class="muted" style="font-size:13px">Open tickets assigned</span></div>
         <div>${load.map(l => `<div class="load"><span>${esc(l.n)}<br><span class="muted" style="font-size:12px">${DEPTS[l.k]}</span></span><span class="bar"><i style="width:${l.c / maxLoad * 100}%;background:${l.k === 'maintenance' ? 'var(--night)' : 'var(--gold)'}"></i></span><b class="num">${l.c}</b></div>`).join('') || '<div class="empty">Add staff in the Staff tab.</div>'}</div></section>
-      <section class="panel"><div class="panel-h"><h3>Inspection coverage</h3><button class="btn small primary" data-act="tab" data-v="inspect">Inspect a room</button></div>
+      <section class="panel"><div class="panel-h"><h3>Turnover inspections</h3><button class="btn small primary" data-act="tab" data-v="inspect">Inspect a room</button></div>
         <div class="meter"><div class="row-between"><span>Inspected in last 7 days</span><b class="num">${in7} of ${rooms.length}</b></div><div class="bar"><i style="width:${pct(in7)}%;background:var(--ok)"></i></div></div>
         <div class="meter"><div class="row-between"><span>Inspected in last 30 days</span><b class="num">${in30} of ${rooms.length}</b></div><div class="bar"><i style="width:${pct(in30)}%;background:var(--ok)"></i></div></div>
         <div class="meter"><span class="muted" style="font-size:13px">Overdue (30+ days)</span><div class="actions">${overdue.slice(0, 16).map(r => `<button class="chip" data-act="room" data-v="${esc(r)}">${esc(r)}</button>`).join('') || '<span class="muted">None</span>'}${overdue.length > 16 ? `<span class="muted">+${overdue.length - 16} more</span>` : ''}</div></div></section>
+      ${(() => { const fb = Object.fromEntries(st.inspections.map(i => [i.id, i.fails])); const iss = st.log.filter(l => l.type === 'inspection' && fb[l.insp] > 0).slice(0, 6);
+        return `<section class="panel" style="grid-column:1/-1"><div class="panel-h"><h3>Recent inspection issues</h3><span class="muted" style="font-size:13px">Missing items and damage from turnovers</span></div>
+        <div class="ov-list">${iss.map(l => `<button class="ov-row" data-act="inspHist" data-v="${esc(l.room)}">${rmCell(l.room)}<span class="t">${esc(l.text.replace(/^Turnover inspection, /, ''))}<small>${esc(l.by)} · ${ago(l.at)}</small></span><span class="pill p-bad">${fb[l.insp]}</span></button>`).join('') || '<div class="empty">No issues found on recent turnovers.</div>'}</div></section>`; })()}
       <section class="panel full-only" style="grid-column:1/-1"><div class="panel-h"><h3>Recent activity</h3><button class="btn small ghost" data-act="tab" data-v="log">Full log</button></div>
         <div class="ov-list">${recent.map(l => `<${l.ticket ? 'button' : 'div'} class="ov-row" ${l.ticket ? `data-act="ticket" data-v="${l.ticket}"` : ''}>${rmCell(l.room)}
           <span class="t">${esc(l.text)}<small>${esc(l.by)}, ${roleLabel(l.role)} · ${ago(l.at)}</small></span>${l.dept ? deptPill(l.dept) : '<span class="pill p-ok">Inspection</span>'}</${l.ticket ? 'button' : 'div'}>`).join('') || '<div class="empty">No activity yet.</div>'}</div></section>
@@ -265,7 +268,7 @@ export function start(app, mode) {
   function vInspect() {
     if (!S.insp) S.insp = { room: '', results: {}, notes: {}, mk: {} };
     const I = S.insp, items = ALL(), done = items.filter(i => I.results[i.id]).length, fails = items.filter(i => I.results[i.id] === 'fail').length, info = I.room ? roomInfo(I.room) : null;
-    return `<div class="view-head"><div><span class="eyebrow">${items.length} checkpoints · failed items open maintenance tickets</span><h2>Inspection sheet</h2></div></div>
+    return `<div class="view-head"><div><span class="eyebrow">${items.length} checks · amenities, cleanliness, damage</span><h2>Turnover inspection</h2></div></div>
     <form class="panel" data-form="insp">
       <div class="sheet-head">
         <label class="f">Room<select id="in-room" data-act="inRoom"><option value="">Select room</option>${st.rooms.map(r => `<option ${I.room === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
@@ -275,13 +278,13 @@ export function start(app, mode) {
       </div>
       ${st.checklist.map(g => `<div class="group"><h3><span>${esc(g.group)}</span><span class="muted num" style="font-family:var(--ff-body);font-size:13px">${g.items.filter(i => I.results[i.id]).length}/${g.items.length}</span></h3>
         ${g.items.map(it => { const v = I.results[it.id]; return `<div class="item"><span>${esc(it.label)}</span>
-          <span class="seg" role="group" aria-label="${esc(it.label)}">${[['pass', 'Pass'], ['fail', 'Fail'], ['na', 'N/A']].map(([k, l]) => `<button type="button" data-act="mark" data-item="${it.id}" data-v="${k}" aria-pressed="${v === k}">${l}</button>`).join('')}</span>
-          ${v === 'fail' ? `<div class="fail-note"><input type="text" data-note="${it.id}" value="${esc(I.notes[it.id] || '')}" placeholder="Describe the problem" maxlength="500"><label><input type="checkbox" data-mk="${it.id}" ${I.mk[it.id] !== false ? 'checked' : ''}> Open ticket</label></div>` : ''}
+          <span class="seg" role="group" aria-label="${esc(it.label)}">${[['pass', 'OK'], ['fail', 'Issue'], ['na', 'N/A']].map(([k, l]) => `<button type="button" data-act="mark" data-item="${it.id}" data-v="${k}" aria-pressed="${v === k}">${l}</button>`).join('')}</span>
+          ${v === 'fail' ? `<div class="fail-note one"><input type="text" data-note="${it.id}" value="${esc(I.notes[it.id] || '')}" placeholder="What's missing or wrong? (optional)" maxlength="500"></div>` : ''}
         </div>`; }).join('')}</div>`).join('')}
       <div class="sheet-foot">
         <div style="display:flex;gap:10px;align-items:center;flex:1;min-width:0"><div class="progress"><i style="width:${items.length ? done / items.length * 100 : 0}%"></i></div>
-          <span class="num" style="font-size:14px">${done}/${items.length}</span>${fails ? `<span class="pill p-bad">${fails} failed</span>` : ''}</div>
-        <div class="actions"><button type="button" class="btn small" data-act="allPass">Rest pass</button>
+          <span class="num" style="font-size:14px">${done}/${items.length}</span>${fails ? `<span class="pill p-bad">${fails} issue${fails > 1 ? 's' : ''}</span>` : ''}</div>
+        <div class="actions"><button type="button" class="btn small" data-act="allPass">Rest OK</button>
         <button type="submit" class="btn small primary" ${I.room && done === items.length ? '' : 'disabled'}>Submit</button></div>
       </div>
     </form>`;
@@ -290,21 +293,43 @@ export function start(app, mode) {
   function vLog() {
     let rows = st.log.slice();
     if (S.logRoom) rows = rows.filter(r => r.room === S.logRoom);
-    if (S.logType) rows = rows.filter(r => S.logType === 'ticket' ? r.type !== 'inspection' : r.type === 'inspection');
+    const failsById = Object.fromEntries(st.inspections.map(i => [i.id, i.fails]));
+    if (S.logType) rows = rows.filter(r => S.logType === 'ticket' ? r.type !== 'inspection' : S.logType === 'issues' ? r.type === 'inspection' && failsById[r.insp] > 0 : r.type === 'inspection');
     const shown = rows.slice(0, 150);
     const L = { inspection: ['Inspection', 'p-ok'], open: ['Opened', 'p-info'], update: ['Update', 'p-warn'], comment: ['Comment', 'p-neutral'], close: ['Closed', 'p-ok'] };
     return `<div class="view-head"><div><span class="eyebrow">Newest first · latest 400 events</span><h2>Activity log</h2></div>
       <div class="filters"><select data-act="logRoom" aria-label="Room"><option value="">All rooms and areas</option><optgroup label="Rooms">${st.rooms.map(r => `<option ${S.logRoom === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</optgroup>${(st.areas || []).length ? `<optgroup label="Property areas">${st.areas.map(r => `<option ${S.logRoom === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</optgroup>` : ''}</select>
-      <select data-act="logType" aria-label="Activity type"><option value="">All activity</option><option value="inspection" ${S.logType === 'inspection' ? 'selected' : ''}>Inspections</option><option value="ticket" ${S.logType === 'ticket' ? 'selected' : ''}>Tickets</option></select></div></div>
+      <select data-act="logType" aria-label="Activity type"><option value="">All activity</option><option value="inspection" ${S.logType === 'inspection' ? 'selected' : ''}>Inspections</option><option value="ticket" ${S.logType === 'ticket' ? 'selected' : ''}>Tickets</option>${role() === 'manager' ? `<option value="issues" ${S.logType === 'issues' ? 'selected' : ''}>Inspection issues</option>` : ''}</select></div></div>
     ${S.logRoom ? (() => { const i = roomInfo(S.logRoom); return `<div class="mini"><div><span class="muted">Last inspected</span><b>${i.lastIns ? ago(i.lastIns) : 'Never'}</b></div><div><span class="muted">Last maintenance</span><b>${i.lastMaint ? ago(i.lastMaint.at) : 'None'}</b></div><div><span class="muted">Open tickets</span><b>${i.open.length}</b></div></div>`; })() : ''}
     <div class="panel tbl-wrap"><table><thead><tr><th>Room</th><th>When</th><th>Activity</th><th>Detail</th><th>By</th></tr></thead><tbody>
       ${shown.map(l => `<tr><td class="rm${isArea(l.room) ? ' area' : ''}">${esc(l.room)}</td><td class="when">${fmt(l.at)}</td><td class="act"><span class="pill ${L[l.type][1]}">${L[l.type][0]}</span></td>
-      <td class="det">${l.ticket ? `<button class="linkish" data-act="ticket" data-v="${l.ticket}">${esc(l.text)}</button>` : esc(l.text)}</td><td class="by muted" style="white-space:nowrap;font-size:14px">${esc(l.by)}, ${roleLabel(l.role)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No activity yet</td></tr>'}
+      <td class="det">${l.ticket ? `<button class="linkish" data-act="ticket" data-v="${l.ticket}">${esc(l.text)}</button>` : l.insp && role() === 'manager' ? `<button class="linkish" data-act="inspHist" data-v="${esc(l.room)}">${esc(l.text)}</button>` : esc(l.text)}</td><td class="by muted" style="white-space:nowrap;font-size:14px">${esc(l.by)}, ${roleLabel(l.role)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No activity yet</td></tr>'}
     </tbody></table>${rows.length > 150 ? `<div class="empty">Showing latest 150 of ${rows.length}</div>` : ''}</div>`;
+  }
+
+  function inspDrawer(D) {
+    const head = `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Room ${esc(D.room)} inspections">
+      <div class="drawer-h"><div><span class="eyebrow">${esc(st.property.name)} · last 3 kept</span><h2>Room ${esc(D.room)} inspections</h2></div><button class="btn small" data-act="close">Close</button></div><div class="drawer-b">`;
+    if (D.err) return head + `<p class="err">${esc(D.err)}</p></div></aside>`;
+    if (!D.data) return head + '<div class="loading" style="min-height:30vh"><span><span class="spin"></span>Loading</span></div></div></aside>';
+    const sh = D.data.sheets;
+    if (!sh.length) return head + '<span class="muted">No turnover inspections saved for this room yet.</span></div></aside>';
+    const res = { pass: ['OK', 'p-ok'], fail: ['Issue', 'p-bad'], na: ['N/A', 'p-neutral'] };
+    const sel = Math.min(D.sel || 0, sh.length - 1), cur = sh[sel], prev = sh[sel + 1];
+    const prevBy = prev ? Object.fromEntries(prev.items.map(x => [x.label, x.result])) : {};
+    const changed = cur.items.filter(x => x.result === 'fail' && prevBy[x.label] === 'pass');
+    const groups = [...new Set(cur.items.map(x => x.grp))];
+    return head + `<div class="toggle full" role="group" aria-label="Inspection">${sh.map((x, k) => `<button type="button" data-act="inspSel" data-v="${k}" aria-pressed="${k === sel}">${new Date(x.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${x.issues ? ` · ${x.issues}` : ''}</button>`).join('')}</div>
+      <div class="muted" style="font-size:14px">${fmt(cur.at)} · ${esc(cur.by)} · ${cur.issues ? `${cur.issues} issue${cur.issues > 1 ? 's' : ''}` : 'all OK'}</div>
+      ${prev ? (changed.length ? `<div class="changed"><span class="eyebrow" style="color:var(--bad)">OK on ${new Date(prev.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, now an issue</span>${changed.map(x => `<div><b>${esc(x.label)}</b>${x.note ? ` · ${esc(x.note)}` : ''}</div>`).join('')}</div>`
+        : `<div class="muted" style="font-size:13px">Nothing newly missing or damaged since ${new Date(prev.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</div>`) : ''}
+      <div class="panel">${groups.map(g => `<div class="group"><h3><span>${esc(g)}</span></h3>${cur.items.filter(x => x.grp === g).map(x => `<div class="item sheet-row"><span>${esc(x.label)}${x.note ? `<small class="muted" style="display:block">${esc(x.note)}</small>` : ''}</span><span class="pill ${res[x.result][1]}">${res[x.result][0]}</span></div>`).join('')}</div>`).join('')}</div>
+    </div></aside>`;
   }
 
   function drawer() {
     const D = S.drawer;
+    if (D.type === 'insp') return inspDrawer(D);
     if (D.type === 'room') {
       const r = D.id, i = roomInfo(r);
       const feed = i.tk.slice().sort((a, b) => (a.status === 'Done') - (b.status === 'Done') || b.createdAt - a.createdAt);
@@ -327,7 +352,7 @@ export function start(app, mode) {
             <div><span class="muted">Last maintenance</span><b>${i.lastMaint ? ago(i.lastMaint.at) : 'None'}</b></div>
             <div><span class="muted">Open</span><b>${i.open.length}${i.ooo ? ' · <span style="color:var(--bad)">OOO</span>' : ''}</b></div>
           </div>`}
-          <div class="actions">${role() !== 'frontdesk' && !isArea(r) ? `<button class="btn small" data-act="inspectRoom" data-v="${esc(r)}">Start inspection</button>` : ''}${simple() ? '' : `<button class="btn small ghost" data-act="logFor" data-v="${esc(r)}">${isArea(r) ? 'Area log' : 'Room log'}</button>`}</div>
+          <div class="actions">${role() !== 'frontdesk' && !isArea(r) ? `<button class="btn small" data-act="inspectRoom" data-v="${esc(r)}">Turnover inspection</button>` : ''}${role() === 'manager' && !isArea(r) && i.ins.length ? `<button class="btn small" data-act="inspHist" data-v="${esc(r)}">Last ${Math.min(3, i.ins.length)} inspections</button>` : ''}${simple() ? '' : `<button class="btn small ghost" data-act="logFor" data-v="${esc(r)}">${isArea(r) ? 'Area log' : 'Room log'}</button>`}</div>
           <div style="display:grid;gap:10px"><span class="eyebrow">${seesAll() ? 'All tickets' : DEPTS[role()] + ' tickets'} for ${isArea(r) ? esc(r.toLowerCase()) : 'this room'} · ${feed.length}</span>
             <div class="feed">${feed.map(t => `<button class="cmt" data-act="ticket" data-v="${t.id}">
               <div class="cmt-h"><b>${esc(t.reportedBy)}</b><span class="muted">${roleLabel(t.reportedRole)} · ${fmt(t.createdAt)}</span></div>
@@ -415,6 +440,13 @@ export function start(app, mode) {
       case 'goRooms': S.tab = 'rooms'; S.filter = 'all'; S.toast = 'Tap a room to write its ticket'; break;
       case 'areaTicket': if (!(st.areas || []).length) { S.toast = 'No property areas set up yet. Run the property-areas SQL update.'; break; } openRoom(st.areas[0]); break;
       case 'noop': return;
+      case 'inspHist': {
+        const room = v; S.drawer = { type: 'insp', room, data: null, sel: 0 }; render();
+        api(`/api/inspections?room=${encodeURIComponent(room)}`).then(d => { if (S.drawer?.type === 'insp' && S.drawer.room === room) { S.drawer.data = d; render(); } })
+          .catch(e => { if (S.drawer?.type === 'insp') { S.drawer.err = e.message; render(); } });
+        return;
+      }
+      case 'inspSel': S.drawer.sel = +v; break;
       case 'notMe': ls.set('rc-name', ''); S.loginErr = ''; S.lgName = ''; render(); document.getElementById('lg-name')?.focus(); return;
       case 'loginBack': S.choose = null; S.loginErr = ''; break;
       case 'pickPortal': return run(() => doLogin({ name: S.nameHold, pin: S.pinHold, staffId: Number(v) }), b);
@@ -471,10 +503,10 @@ export function start(app, mode) {
     }
     if (f === 'insp') {
       const I = S.insp; if (!I.room) return;
-      const results = ALL().map(i => ({ itemId: i.id, result: I.results[i.id], note: I.notes[i.id] || '', makeTicket: I.mk[i.id] !== false }));
+      const results = ALL().map(i => ({ itemId: i.id, result: I.results[i.id], note: I.notes[i.id] || '' }));
       return run(async () => {
         const r = await api('/api/inspections', { method: 'POST', body: { room: I.room, results } });
-        S.toast = `Room ${I.room} inspected${r.opened ? `, ${r.opened} maintenance ticket${r.opened > 1 ? 's' : ''} opened` : ''}`;
+        S.toast = `Room ${I.room} turnover saved${r.issues ? `, ${r.issues} issue${r.issues > 1 ? 's' : ''} noted` : ', all OK'}`;
         S.insp = null; await reload();
       }, btn);
     }

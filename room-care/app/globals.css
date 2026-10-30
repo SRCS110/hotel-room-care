@@ -343,3 +343,15 @@ td.rm.area{font-size:11px}
 .choose .btn{min-height:52px}
 .login-card .check{justify-self:start}
 @media (max-width:700px){main.notabs{padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}}
+.fail-note.one{grid-template-columns:minmax(0,1fr)}
+@media (max-width:700px){
+  .sheet-foot{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:12px 14px}
+  .sheet-foot>div:first-child{width:100%}
+  .sheet-foot .progress{max-width:none}
+  .sheet-foot .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .sheet-foot .actions .btn{min-height:46px}
+}
+
+.changed{border:1px solid color-mix(in srgb,var(--bad) 35%,var(--line));background:var(--bad-soft);padding:12px 14px;display:grid;gap:6px;font-size:14px}
+.sheet-row{grid-template-columns:minmax(0,1fr) auto!important}
+@media (max-width:480px){.sheet-row{grid-template-columns:minmax(0,1fr) auto!important}}

@@ -15,6 +15,7 @@ It is built to live at a private address such as `staff.staysantarosa.com`. It i
 | `next.config.js`, `public/robots.txt`, `app/layout.js` | Keep the site out of Google: a `noindex` header on every response, a `Disallow: /` robots file, and a robots meta tag. |
 
 ## Updating an existing install
+- **Oct 30 update (turnover inspection and inspection history):** run `supabase/migrations/003_turnover_inspection.sql`, then `supabase/migrations/004_inspection_history.sql`, once each in the Supabase SQL Editor. Then deploy the new code.
 - **Oct 29 update (property tickets and the Maintenance hotel toggle):** run `supabase/migrations/002_property_areas.sql` once in the Supabase SQL Editor, then deploy the new code. A fresh install doesn't need this, because `schema.sql` already includes it.
 
 ## Setup (about 20 minutes)
@@ -61,6 +62,14 @@ curl -s  https://staff.staysantarosa.com/robots.txt                 # expect: Di
 
 ## Maintenance on a phone
 On a phone, Maintenance sees a single screen: the active tickets for the current hotel, urgent first, with the hotel toggle above. Opening a ticket gives two actions: **Post comment** and **Mark done**. Mark done also saves anything typed in the comment box. There's no accepting or assigning tickets. **Full view** in the header still opens Rooms, Inspect and Log if needed.
+
+## Turnover inspections
+- The Turnover tab has 26 checks in four groups: **Linens & amenities** (robes, extra blanket, pillows, towels, hangers, hair dryer, iron, coffee, toiletries, remote), **Works & present**, **Clean** and **Damage**. Each check is marked OK, Issue or N/A, and an issue can have a short note.
+- Inspections don't create tickets. File tickets from the Rooms page.
+- **Who sees what:** Housekeeping, Maintenance and managers can record turnovers. Only **managers** can see the history, the issue details, the **Inspection issues** filter in the Log, and the **Recent inspection issues** panel on the Overview. The server enforces this. Other portals' logs only show "Turnover inspection completed".
+- **History:** every completed sheet is saved item by item. Open it from the room panel (**Last 3 inspections**) or by tapping an inspection in the Log. The viewer flags anything that was OK on the previous sheet and is now an issue, which makes it easy to tell what went missing during a stay.
+- **Storage:** only the latest **3** sheets per room are kept. Older ones are deleted automatically when a new one is submitted. Tickets that came from an old sheet are kept.
+- **Edit the checklist** in Supabase under Table Editor > checklist_items. Set `active = false` to retire an item.
 
 ## How the security works
 - **PIN check.** PINs are stored as bcrypt hashes and checked on the server. After 5 wrong tries, that login is locked for 15 minutes. A manager can clear the lock by resetting the PIN.

@@ -39,7 +39,7 @@ export async function GET() {
     const iq = db().from('inspections').select('id,room_id,staff_id,completed_at,fail_count')
       .in('room_id', roomIds).gte('completed_at', new Date(Date.now() - 400 * DAY).toISOString())
       .order('completed_at', { ascending: false }).limit(3000);
-    let lq = db().from('activity_log').select('id,room_id,kind,department,staff_id,ticket_id,summary,created_at')
+    let lq = db().from('activity_log').select('id,room_id,kind,department,staff_id,ticket_id,inspection_id,summary,created_at')
       .in('room_id', roomIds).order('created_at', { ascending: false }).limit(400);
     if (!seesAll) lq = lq.or(`department.is.null,department.eq.${me.portal}`);
     const [tickets, ooo, inspections, log] = await Promise.all([q(tq), q(oooQ), q(iq), q(lq)]);
@@ -69,8 +69,9 @@ export async function GET() {
         notes: (t.ticket_comments || []).sort((a, b) => ms(a.created_at) - ms(b.created_at))
           .map(c => ({ at: ms(c.created_at), by: nm(c.staff_id), role: role(c.staff_id), text: c.body || '', change: c.change_summary || '' }))
       })),
-      inspections: inspections.map(i => ({ room: roomNo[i.room_id], at: ms(i.completed_at), by: nm(i.staff_id), fails: i.fail_count })),
-      log: log.map(l => ({ at: ms(l.created_at), room: roomNo[l.room_id], type: l.kind, by: nm(l.staff_id), role: role(l.staff_id), text: l.summary, ticket: l.ticket_id, dept: l.department }))
+      // Issue counts and details are for managers; staff only see that a room was inspected.
+      inspections: inspections.map(i => ({ id: i.id, room: roomNo[i.room_id], at: ms(i.completed_at), by: nm(i.staff_id), fails: me.portal === 'manager' ? i.fail_count : null })),
+      log: log.map(l => ({ at: ms(l.created_at), room: roomNo[l.room_id], type: l.kind, by: nm(l.staff_id), role: role(l.staff_id), text: l.kind === 'inspection' && me.portal !== 'manager' ? 'Turnover inspection completed' : l.summary, ticket: l.ticket_id, insp: me.portal === 'manager' ? l.inspection_id : null, dept: l.department }))
     });
   } catch (e) { console.error(e); return fail(`Could not load data. ${setupHint(e)}`, 500); }
 }

@@ -73,7 +73,7 @@ create table if not exists tickets (
   out_of_order  boolean not null default false,
   reported_by   bigint references staff(id),
   assigned_to   bigint references staff(id),
-  inspection_id bigint references inspections(id),
+  inspection_id bigint references inspections(id) on delete set null,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   closed_at     timestamptz
@@ -158,36 +158,35 @@ cross join (values
 ) as a(name)
 on conflict (property_id, number) do nothing;
 
--- Inspection checklist (edit freely later; set active=false to retire an item)
+-- Turnover inspection checklist (edit freely later; set active=false to retire an item)
 insert into checklist_items (grp, label, sort)
 select * from (values
-  ('Entry & safety','Door lock / key card reader',10),
-  ('Entry & safety','Door closer & latch',20),
-  ('Entry & safety','Security latch & peephole',30),
-  ('Entry & safety','Smoke detector',40),
-  ('Entry & safety','Evacuation map posted',50),
-  ('Bedroom','HVAC / PTAC heat & cool',110),
-  ('Bedroom','Thermostat',120),
-  ('Bedroom','Lights & bulbs',130),
-  ('Bedroom','Outlets & USB ports',140),
-  ('Bedroom','TV & remote',150),
-  ('Bedroom','Phone',160),
-  ('Bedroom','In-room safe',170),
-  ('Bedroom','Mini fridge',180),
-  ('Bedroom','Coffee maker',190),
-  ('Bedroom','Windows, blinds & drapes',200),
-  ('Bedroom','Furniture & headboard',210),
-  ('Bedroom','Walls & paint',220),
-  ('Bedroom','Carpet / flooring',230),
-  ('Bathroom','Toilet flush & seal',310),
-  ('Bathroom','Sink faucet & drain',320),
-  ('Bathroom','Shower / tub drain',330),
-  ('Bathroom','Water pressure & temperature',340),
-  ('Bathroom','Grout & caulk',350),
-  ('Bathroom','Exhaust fan',360),
-  ('Bathroom','Vanity lighting & mirror',370),
-  ('Bathroom','Towel bars & hooks',380),
-  ('Bathroom','Hair dryer',390)
+  ('Linens & amenities','Robes (2) present',10),
+  ('Linens & amenities','Extra blanket present',20),
+  ('Linens & amenities','Pillows present (full count)',30),
+  ('Linens & amenities','Towels: full set',40),
+  ('Linens & amenities','Hangers present',50),
+  ('Linens & amenities','Hair dryer present',60),
+  ('Linens & amenities','Iron & ironing board present',70),
+  ('Linens & amenities','Coffee maker, pods & cups stocked',80),
+  ('Linens & amenities','Toiletries stocked',90),
+  ('Linens & amenities','TV remote present',100),
+  ('Works & present','TV turns on, remote works',210),
+  ('Works & present','Lamps present, working, not broken',220),
+  ('Works & present','Phone & clock present',230),
+  ('Works & present','Mini fridge empty & clean',240),
+  ('Works & present','Heat / AC runs',250),
+  ('Clean','Bed made, linens fresh',310),
+  ('Clean','Drapes & sheers clean',320),
+  ('Clean','Carpet clean, no stains',330),
+  ('Clean','Hard floors clean',340),
+  ('Clean','Furniture clean & dusted',350),
+  ('Clean','Bathroom clean (toilet, sink, tub/shower)',360),
+  ('Clean','Mirrors & glass clean',370),
+  ('Clean','Trash emptied',380),
+  ('Damage','No room damage (walls, doors, ceiling)',410),
+  ('Damage','No furniture damage',420),
+  ('Damage','No odor or smoking signs',430)
 ) as v(grp, label, sort)
 where not exists (select 1 from checklist_items);
 
